@@ -197,20 +197,76 @@ order by p.passenger_full_name asc;
 -- Phần 5: Tạo view
 -- 1. Tạo view view_all_passenger_booking để lấy danh sách tất cả các hành khách và vé họ đã đặt, gồm mã hành khách, tên hành khách, mã vé, mã chuyến bay và số lượng vé đã đặt
 create view view_all_passenger_booking as
-select 
--- 2. Tạo view view_successful_payment để lấy danh sách các hành khách đã thanh toán thành công, gồm mã hành khách, tên hành khách và số tiền thanh toán, chỉ lấy các giao dịch có trạng thái thanh toán "Success"
+select p.passenger_id, p.passenger_full_name, b.booking_id, b.flight_id, b.ticket_quantity from Passenger p
+join Booking b on p.passenger_id = b.passenger_id;
 
+select * from view_all_passenger_booking;
+
+-- 2. Tạo view view_successful_payment để lấy danh sách các hành khách đã thanh toán thành công, gồm mã hành khách, tên hành khách và số tiền thanh toán, chỉ lấy các giao dịch có trạng thái thanh toán "Success"
+create view view_successful_payment as
+select p.passenger_id, p.passenger_full_name, pa.payment_amount from Passenger p
+join Booking b on p.passenger_id = b.passenger_id
+join Payment pa on b.booking_id = pa.booking_id
+where pa.payment_status = 'Success';
+
+select * from view_successful_payment;
 
 -- PHẦN 6: Tạo Trigger
 -- 1. Tạo một trigger để kiểm tra và đảm bảo rằng số lượng vé (ticket_quantity) trong bảng Booking không bị giảm xuống dưới 1 khi có sự thay đổi. Nếu số lượng vé nhỏ hơn 1, trigger sẽ thông báo lỗi SIGNAL SQLSTATE và không cho phép cập nhật.
-
+delimiter //
+	drop trigger if exists trigger_check_ticket_quantity //
+		create trigger trigger_check_ticket_quantity
+		before insert on Booking
+		for each row 
+   begin
+		if new.ticket_quantity < 1 then
+			signal sqlstate '45000'
+            set message_text = ' SIGNAL SQLSTATE';
+		end if;
+    end //
+delimiter ;
+ insert into Booking (booking_id, passenger_id, flight_id, booking_date, booking_status, ticket_quantity) 
+ values(23, 'P0010', 'F004', '2025-03-10', 'Confirmed', 2);
+ 
 -- 2. Tạo một trigger để khi thực hiện chèn dữ liệu vào bảng Payment, sẽ tự động kiểm tra trạng thái thanh toán, nếu như trạng thái thanh toán là “Success” thì tiến hành cập nhật trạng thái booking_status của ở bảng Booking tương ứng với hóa đơn đó thành “Confirmed”
+delimiter //
+	drop trigger if exists trigger_check_update_booking //
+		create trigger trigger_check_update_booking
+		after insert on Payment
+		for each row
+	begin
+		if new.payment_status = 'Success' then
+			update Booking 
+			set booking_status = 'Confirmed'
+			where booking_id = new.booking_id;
+		end if;
+	end //
+delimiter ;
+
+insert into Payment (payment_id, booking_id, payment_status, payment_amount)
+values (1, 20, 'Success', 500.00);
+
+-- Phần 7: Tạo Store Procedure
+-- 1. Tạo một stored procedure có tên GetAllPassengerBookings để lấy thông tin tất cả các hành khách và vé họ đã đặt, bao gồm mã hành khách, tên hành khách, mã vé, mã chuyến bay và số lượng vé
+delimiter //
+	drop procedure if exists GetAllPassengerBookings //
+		create procedure GetAllPassengerBookings()
+	begin
+		select p.passenger_id, p.passenger_name, b.booking_id, b.flight_id, b.ticket_quantity from Passenger p
+		join Booking b on p.passenger_id = b.passenger_id;
+end //
+delimiter ;
 
 
+-- 2. Tạo một stored procedure có tên AddBooking để thực hiện thao tác cập nhật một bản ghi trong vào bảng Booking dựa theo khóa chính.
 
+
+drop view view_successful_payment;
 drop database managerbookingfilght;
 
 SET SQL_SAFE_UPDATES = 0;
+
+
 
 
 
